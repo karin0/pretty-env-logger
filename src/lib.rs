@@ -190,9 +190,15 @@ pub fn formatted_builder() -> Builder {
 /// for further customization. Refer to env_logger::Build crate documentation
 /// for further details and usage.
 pub fn formatted_timed_builder() -> Builder {
+    let format = time::format_description::parse(
+        " [year]-[month]-[day] [hour]:[minute]:[second].[subsecond digits:3]",
+    )
+    .unwrap();
+    let offset = time::UtcOffset::current_local_offset().unwrap();
+
     let mut builder = Builder::new();
 
-    builder.format(|f, record| {
+    builder.format(move |f, record| {
         use std::io::Write;
         let target = record.target();
         let max_width = max_target_width(target);
@@ -206,9 +212,12 @@ pub fn formatted_timed_builder() -> Builder {
             width: max_width,
         });
 
-        let time = f.timestamp_millis();
+        time::OffsetDateTime::now_utc()
+            .to_offset(offset.to_owned())
+            .format_into(f, &format)
+            .unwrap();
 
-        writeln!(f, " {} {} {} > {}", time, level, target, record.args(),)
+        writeln!(f, " {} {} > {}", level, target, record.args(),)
     });
 
     builder
