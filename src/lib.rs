@@ -197,6 +197,7 @@ pub fn formatted_timed_builder() -> Builder {
     let offset = time::UtcOffset::current_local_offset().unwrap();
 
     let mut builder = Builder::new();
+    let compact = std::env::var("PRETTY_ENV_LOGGER_COMPACT").is_ok();
 
     builder.format(move |f, record| {
         use std::io::Write;
@@ -206,18 +207,21 @@ pub fn formatted_timed_builder() -> Builder {
         let mut style = f.style();
         let level = colored_level(&mut style, record.level());
 
-        let mut style = f.style();
-        let target = style.set_bold(true).value(Padded {
-            value: target,
-            width: max_width,
-        });
-
         time::OffsetDateTime::now_utc()
             .to_offset(offset.to_owned())
             .format_into(f, &format)
             .unwrap();
 
-        writeln!(f, " {} {} > {}", level, target, record.args(),)
+        if compact {
+            writeln!(f, " {} {}", level, record.args(),)
+        } else {
+            let mut style = f.style();
+            let target = style.set_bold(true).value(Padded {
+                value: target,
+                width: max_width,
+            });
+            writeln!(f, " {} {} > {}", level, target, record.args(),)
+        }
     });
 
     builder
