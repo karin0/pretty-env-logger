@@ -86,7 +86,7 @@ pub fn init_timed() {
 ///
 /// This function fails to set the global logger if one has already been set.
 pub fn try_init() -> Result<(), log::SetLoggerError> {
-    try_init_custom_env("RUST_LOG")
+    try_init_auto_custom_env("RUST_LOG")
 }
 
 /// Initializes the global logger with a timed pretty env logger.
@@ -99,7 +99,7 @@ pub fn try_init() -> Result<(), log::SetLoggerError> {
 ///
 /// This function fails to set the global logger if one has already been set.
 pub fn try_init_timed() -> Result<(), log::SetLoggerError> {
-    try_init_timed_custom_env("RUST_LOG")
+    try_init_auto_timed_custom_env("RUST_LOG", true)
 }
 
 /// Initialized the global logger with a pretty env logger, with a custom variable name.
@@ -155,6 +155,37 @@ pub fn try_init_timed_custom_env(
     builder.try_init()
 }
 
+fn try_init_auto_custom_env(environment_variable_name: &str) -> Result<(), log::SetLoggerError> {
+    let mut timed = true;
+    #[cfg(unix)]
+    if ::std::env::var("JOURNAL_STREAM").is_ok() {
+        if let Ok(stat) = std::fs::metadata("/dev/stdout") {
+            use std::os::unix::fs::FileTypeExt;
+            if stat.file_type().is_socket() {
+                timed = false;
+            }
+        }
+    }
+    try_init_auto_timed_custom_env(environment_variable_name, timed)
+}
+
+fn try_init_auto_timed_custom_env(
+    environment_variable_name: &str,
+    timed: bool,
+) -> Result<(), log::SetLoggerError> {
+    let filters = ::std::env::var(environment_variable_name);
+
+    let mut builder = formatted_custom_builder(timed, filters.is_err());
+
+    if let Ok(s) = filters {
+        builder.parse_filters(&s);
+    } else {
+        builder.filter_level(log::LevelFilter::Info);
+    }
+
+    builder.try_init()
+}
+
 /// Returns a `env_logger::Builder` for further customization.
 ///
 /// This method will return a colored and formatted `env_logger::Builder`
@@ -190,9 +221,24 @@ pub fn formatted_builder() -> Builder {
 /// for further customization. Refer to env_logger::Build crate documentation
 /// for further details and usage.
 pub fn formatted_timed_builder() -> Builder {
+    formatted_custom_builder(true, false)
+}
+
+fn formatted_custom_builder(timed: bool, compact: bool) -> Builder {
+    let format = if timed {
+        let format = time::format_description::parse(
+            "[year]-[month]-[day] [hour]:[minute]:[second].[subsecond digits:3] ",
+        )
+        .unwrap();
+        let offset = time::UtcOffset::current_local_offset().unwrap();
+        Some((format, offset))
+    } else {
+        None
+    };
+
     let mut builder = Builder::new();
 
-    builder.format(|f, record| {
+    builder.format(move |f, record| {
         use std::io::Write;
         let target = record.target();
         let max_width = max_target_width(target);
@@ -200,15 +246,23 @@ pub fn formatted_timed_builder() -> Builder {
         let mut style = f.style();
         let level = colored_level(&mut style, record.level());
 
-        let mut style = f.style();
-        let target = style.set_bold(true).value(Padded {
-            value: target,
-            width: max_width,
-        });
+        if let Some((format, offset)) = &format {
+            time::OffsetDateTime::now_utc()
+                .to_offset(offset.to_owned())
+                .format_into(f, &format)
+                .unwrap();
+        }
 
-        let time = f.timestamp_millis();
-
-        writeln!(f, " {} {} {} > {}", time, level, target, record.args(),)
+        if compact {
+            writeln!(f, "{} {}", level, record.args(),)
+        } else {
+            let mut style = f.style();
+            let target = style.set_bold(true).value(Padded {
+                value: target,
+                width: max_width,
+            });
+            writeln!(f, "{} {} > {}", level, target, record.args(),)
+        }
     });
 
     builder
