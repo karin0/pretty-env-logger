@@ -189,8 +189,9 @@ fn try_init_auto_timed_custom_env(
 /// Returns a `env_logger::Builder` for further customization.
 ///
 /// This method will return a colored and formatted `env_logger::Builder`
-/// for further customization. Refer to env_logger::Build crate documentation
+/// for further customization. Refer to `env_logger::Build` crate documentation
 /// for further details and usage.
+#[must_use]
 pub fn formatted_builder() -> Builder {
     let mut builder = Builder::new();
 
@@ -209,7 +210,7 @@ pub fn formatted_builder() -> Builder {
             width: max_width,
         });
 
-        writeln!(f, " {} {} > {}", level, target, record.args(),)
+        writeln!(f, " {} {} > {}", level, target, record.args())
     });
 
     builder
@@ -218,8 +219,9 @@ pub fn formatted_builder() -> Builder {
 /// Returns a `env_logger::Builder` for further customization.
 ///
 /// This method will return a colored and time formatted `env_logger::Builder`
-/// for further customization. Refer to env_logger::Build crate documentation
+/// for further customization. Refer to `env_logger::Build` crate documentation
 /// for further details and usage.
+#[must_use]
 pub fn formatted_timed_builder() -> Builder {
     formatted_custom_builder(true, false)
 }
@@ -254,14 +256,14 @@ fn formatted_custom_builder(timed: bool, compact: bool) -> Builder {
         }
 
         if compact {
-            writeln!(f, "{} {}", level, record.args(),)
+            writeln!(f, "{} {}", level, record.args())
         } else {
             let mut style = f.style();
             let target = style.set_bold(true).value(Padded {
                 value: target,
                 width: max_width,
             });
-            writeln!(f, "{} {} > {}", level, target, record.args(),)
+            writeln!(f, "{} {} > {}", level, target, record.args())
         }
     });
 
@@ -291,7 +293,7 @@ fn max_target_width(target: &str) -> usize {
     }
 }
 
-fn colored_level<'a>(style: &'a mut Style, level: Level) -> StyledValue<'a, &'static str> {
+fn colored_level(style: &mut Style, level: Level) -> StyledValue<'_, &'static str> {
     match level {
         Level::Trace => style.set_color(Color::Magenta).value("TRACE"),
         Level::Debug => style.set_color(Color::Blue).value("DEBUG"),
